@@ -1,127 +1,73 @@
 package com.lambdatest;
+
+import oshi.SystemInfo;
+import oshi.software.os.OSProcess;
+import oshi.software.os.OperatingSystem;
+
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.Reader;
+import java.util.List;
 
-/**
- * kills the port active.
- */
 public class KillPort {
 
-    /**
-     * Executes kill process
-     */
-    public static void killProcess(int port) {
+    private OperatingSystem os;
 
+    public KillPort() {
+        SystemInfo si = new SystemInfo();
+        this.os = si.getOperatingSystem();
+    }
+
+    public void killProcess(int port) {
         int pid = getPid(port);
-
-        if (pid == 0) {
+        if (pid <= 0) {
+            System.out.println("No process found on port: " + port);
             return;
         }
 
-        String[] command = { "taskkill", "/F", "/T", "/PID", Integer.toString(pid) };
-        if (System.getProperty("os.name").startsWith("Linux")) {
-            String[] cmd = { "kill", "-9", Integer.toString(pid) };
-            command = cmd;
-        }
-
         try {
-            Process killer = Runtime.getRuntime().exec(command);
-            int result = killer.waitFor();
-
-        } catch (IOException e1) {
-            e1.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            String cmd = System.getProperty("os.name").startsWith("Windows") ?
+                    "taskkill /F /PID " + pid :
+                    "kill -9 " + pid;
+            Process process = Runtime.getRuntime().exec(cmd);
+            process.waitFor();
+            System.out.println("Process " + pid + " has been terminated.");
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Error terminating process: " + e.getMessage());
         }
     }
 
-    /**
-     * gets the pid of port running
-     */
-    public static int getPid(int port) {
-        if (System.getProperty("os.name").startsWith("Windows")) {
-            return getPidWin(port);
-        } else {
-            return getPidLinux(port);
-        }
+    private int getPid(int port) {
+        String command = System.getProperty("os.name").startsWith("Windows") ? 
+                         "netstat -ano | findstr :" + port :
+                         "netstat -tulpn | grep :" + port;
+        return executeSystemCommandForPid(command, port);
     }
 
-    /**
-     * gets PID on Windows
-     */
-    public static int getPidWin(int port) {
-        String[] command = { "netstat", "-on" };
-        try {
-            Process netstat = Runtime.getRuntime().exec(command);
-
-            StringBuilder conectionList = new StringBuilder();
-            Reader reader = new InputStreamReader(netstat.getInputStream());
-            char[] buffer = new char[1024];
-            for (int n = reader.read(buffer); n != -1; n = reader.read(buffer)) {
-                conectionList.append(buffer, 0, n);
-            }
-            reader.close();
-            String[] conections = conectionList.toString().split("\n");
-            int portIdx = 10000;
-            String pid = null;
-            for (String conection : conections) {
-                int idx = conection.indexOf(":" + port);
-                if (idx == -1 || idx > portIdx) {
-                    continue;
+    private int executeSystemCommandForPid(String command, int port) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(Runtime.getRuntime().exec(command).getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains(Integer.toString(port))) {
+                    return parsePidFromLine(line);
                 }
-                String state = "ESTABLISHED";
-                int stateIdx = conection.indexOf(state);
-                if (stateIdx == -1) {
-                    continue;
-                }
-                portIdx = idx;
-                idx = stateIdx + state.length();
-                pid = conection.substring(idx).trim();
             }
-            if (pid != null) {
-                return Integer.valueOf(pid);
-            }
-
-        } catch (Exception e) {
+        } catch (IOException e) {
+            System.err.println("Failed to execute command to find PID: " + e.getMessage());
         }
-
-        return 0;
-
+        return -1;
     }
 
-    /**
-     * Gets PID on Linux
-     */
-    public static int getPidLinux(int port) {
-        String[] command = { "netstat", "-anp" };
+    private int parsePidFromLine(String line) {
+        String[] parts = line.trim().split("\\s+");
+        String lastColumn = parts[parts.length - 1];
         try {
-            Process netstat = Runtime.getRuntime().exec(command);
-
-            StringBuilder conectionList = new StringBuilder();
-            Reader reader = new InputStreamReader(netstat.getInputStream());
-            char[] buffer = new char[1024];
-            for (int n = reader.read(buffer); n != -1; n = reader.read(buffer)) {
-                conectionList.append(buffer, 0, n);
-            }
-            reader.close();
-            String[] conections = conectionList.toString().split("\n");
-            String pid = null;
-            for (String conection : conections) {
-                if (conection.contains(":" + port) && conection.contains("/soffice.bin")) {
-                    int idx = conection.indexOf("/soffice.bin");
-                    int idx2 = idx;
-                    while (Character.isDigit(conection.charAt(--idx2)))
-                        ;
-                    pid = conection.substring(idx2 + 1, idx);
-                }
-            }
-            if (pid != null) {
-                return Integer.valueOf(pid);
-            }
-
-        } catch (Exception e) {
+            return System.getProperty("os.name").startsWith("Windows") ? 
+                   Integer.parseInt(parts[parts.length - 1]) :
+                   Integer.parseInt(lastColumn.substring(0, lastColumn.indexOf('/')));
+        } catch (NumberFormatException e) {
+            System.err.println("Failed to parse PID from line: " + line);
+            return -1;
         }
-        return 0;
     }
 }

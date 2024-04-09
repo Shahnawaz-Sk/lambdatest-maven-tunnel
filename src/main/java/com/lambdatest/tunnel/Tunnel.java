@@ -5,8 +5,6 @@ import java.nio.file.*;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
@@ -15,7 +13,8 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import java.util.HashMap;
+import org.json.JSONObject;
+
 import com.lambdatest.httpserver.HttpServer;
 import com.lambdatest.tunnel.TestDaemonThread1;
 import com.lambdatest.KillPort;
@@ -202,7 +201,7 @@ public class Tunnel {
 
     public void stopTunnel() throws TunnelException {
         try {
-            String deleteEndpoint = "http://127.0.0.1:" + String.valueOf(infoAPIPortValue) + "/api/v1.0/stop";
+            String deleteEndpoint = "https://ts.lambdatest.com/v1.0/stop/" + TunnelID;
             CloseableHttpClient httpclient = HttpClients.createDefault();
 
             HttpDelete httpDelete = new HttpDelete(deleteEndpoint);
@@ -498,15 +497,21 @@ public class Tunnel {
                     }
 
                     try {
-                            if (t1.port != null) {
-                                BufferedReader br = new BufferedReader(
-                                        new FileReader(String.valueOf(".lambdatest/tunnelprocs/" + t1.port) + ".txt"));
-                                if (br.readLine() != null) {
-                                    tunnelFlag = true;
-                                    System.out.println("Tunnel Started Successfully");
-                                    return;
-                                }
-                            }
+
+                        if (t1.port != null) {
+                            BufferedReader br = new BufferedReader(new FileReader(".lambdatest/tunnelprocs/" + t1.port + ".txt"));
+                            String readLine = br.readLine();
+                        
+                            if (readLine != null) {
+                                JSONObject jsonObj = new JSONObject(readLine);
+                                JSONObject dataObj = jsonObj.getJSONObject("data");
+                                
+                                TunnelID = String.valueOf(dataObj.getInt("id"));
+                                System.out.println("TunnelID: " + TunnelID);
+                                tunnelFlag = true;
+                                System.out.println("Tunnel Started Successfully with ID: " + TunnelID);
+                            } 
+                        }
                         } catch (Exception e) {
                             // System.out.println("Not found any file");
                         }
@@ -540,15 +545,18 @@ public class Tunnel {
                     }
 
                      try {
-                            if (t1.port != null) {
-                                BufferedReader br = new BufferedReader(
-                                        new FileReader(String.valueOf(".lambdatest/tunnelprocs/" + t1.port) + ".txt"));
-                                if (br.readLine() != null) {
-                                    tunnelFlag = true;
-                                    System.out.println("Tunnel Started Successfully");
-                                    return;
-                                }
-                            }
+                        if (t1.port != null) {
+                            BufferedReader br = new BufferedReader(new FileReader(".lambdatest/tunnelprocs/" + t1.port + ".txt"));
+                            String readLine = br.readLine();
+                        
+                            if (readLine != null) {
+                                JSONObject jsonObj = new JSONObject(readLine);
+                                JSONObject dataObj = jsonObj.getJSONObject("data");
+                                TunnelID = String.valueOf(dataObj.getInt("id"));
+                                tunnelFlag = true;
+                                System.out.println("Tunnel Started Successfully with ID: " + TunnelID);
+                            } 
+                        }
                         } catch (Exception e) {
                             // System.out.println("Not found any file");
                         }

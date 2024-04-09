@@ -82,6 +82,12 @@
 			<version>7.7.1</version>
 			<scope>compile</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>com.github.oshi</groupId>
+			<artifactId>oshi-core</artifactId>
+			<version>6.5.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
